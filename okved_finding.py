@@ -7,6 +7,7 @@ from time import sleep
 import logging
 import json
 from datetime import datetime
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,17 +24,14 @@ user_agents = [
 ]
 
 PROXY_LIST = [
-    # 'http://164.163.42.3:10000',
+    'http://164.163.42.3:10000',
     # 'http://92.58.181.171:7575',
     # 'http://66.36.234.130:1339',
     # 'http://164.163.42.12:10000'
-    'http://223.204.14.241:8080'
+    # 'http://38.52.155.163:999'
 ]
 
 BAD_PROXIES = set()
-SLOW_PROXIES = set()
-USED_PROXIES = set()
-
 
 def save_progress(inn_dict, filename=None):
 
@@ -85,17 +83,29 @@ session = update_user_agent(session)
 
 # Основной код
 base_url = "https://egrul.itsoft.ru"
-df = pd.read_excel('контракты.xlsx')
-inn = df['ИНН исполнителя'].dropna().astype(int).astype(str).unique()
 
-inn_dict = {i: None for i in inn}
-total_inn = len(inn)
+if os.path.exists('результаты_оквед_полные.xlsx') == False:
+    df = pd.read_excel('контракты.xlsx', engine='openpyxl')
+    inn = df['ИНН исполнителя'].dropna().astype('int64').astype(str).unique()
+    inn_dict = {i: None for i in inn}
+else:
+    df = pd.read_excel('результаты_оквед_полные.xlsx', engine='openpyxl')
+    inn_dict = df.set_index('ИНН')['ОКВЭД'].to_dict()
+    print("Берем незавершенный файл")
+    print(inn_dict)
+
+
+
+
+total_inn = len(inn_dict)
 processed_count = 0
 
 logger.info(f"Всего ИНН для обработки: {total_inn}")
 
+inn_to_process = [inn for inn, okved in inn_dict.items() if pd.isna(okved)]
+print(inn_to_process)
 try:
-    for i in inn_dict:
+    for i in inn_to_process:
         logger.info(f"\nОбрабатывается ИНН: {i} ({processed_count + 1}/{total_inn})")
 
         max_attempts = 4
@@ -139,6 +149,8 @@ try:
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Ошибка запроса: {e}")
+                if proxies and 'http' in proxies:
+                    BAD_PROXIES.add(proxies['http'])
                 sleep(2)
 
             except Exception as e:
@@ -147,30 +159,16 @@ try:
 
         if not success:
             logger.error(f"Не удалось обработать ИНН {i}")
-            inn_dict[i] = "Ошибка: не удалось получить данные"
-            processed_count += 1
-
-        if processed_count % 10 == 0 or not success:
-            save_progress(inn_dict)
+            break
 
         sleep_duration = random.uniform(2, 5)
         sleep(sleep_duration)
-
-except KeyboardInterrupt:
-    logger.info("\nПрограмма прервана")
-    save_progress(inn_dict, 'результаты_оквед_прервано.xlsx')
-
-except Exception as e:
-    logger.error(f"\nКритическая ошибка: {e}")
-    save_progress(inn_dict, 'результаты_оквед_ошибка.xlsx')
 
 finally:
 
     print("\n" + "=" * 50)
     logger.info("ЗАВЕРШЕНИЕ РАБОТЫ")
     print("=" * 50)
-
-    save_progress(inn_dict, 'результаты_оквед_финальные.xlsx')
 
     result_df = pd.DataFrame(list(inn_dict.items()), columns=['ИНН', 'ОКВЭД'])
     result_df.to_excel('результаты_оквед_полные.xlsx', index=False)
