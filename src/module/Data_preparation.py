@@ -34,7 +34,6 @@ def quantity_executors(data):
 
     group.columns = ['ИНН исполнителя','Сумма контрактов', 'Средняя цена контракта',
                      'Сумма оплат', 'Средняя сумма оплат', 'Количество контрактов']
-    # print(f'\nВ разрезе исполнителей\n{group}')
     return group
 
 def quantity_status(data):
@@ -44,7 +43,6 @@ def quantity_status(data):
         'Реестровый номер контракта': 'nunique',
         'ИНН исполнителя': 'nunique'
         })
-    print(f'\nВ разрезе завершено/прекращено\n{group}')
     return group
 
 def filtred_data(data):
